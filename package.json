@@ -1,0 +1,32 @@
+{
+  "name": "wall-paint-preview",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "file-saver": "^2.0.5",
+    "framer-motion": "^11.11.1",
+    "jszip": "^3.10.1",
+    "konva": "^9.3.18",
+    "react": "^19.0.0",
+    "react-colorful": "^5.7.0",
+    "react-dom": "^19.0.0",
+    "react-konva": "^19.2.5",
+    "react-router-dom": "^6.26.2",
+    "use-sound": "^5.0.0",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.10"
+  }
+}
