@@ -9,6 +9,7 @@ import WallpaperPanel from '../components/panels/WallpaperPanel'
 import MoodPresets from '../components/panels/MoodPresets'
 import ProcessingOverlay from '../components/ui/ProcessingOverlay'
 import BeforeAfterSlider from '../components/comparison/BeforeAfterSlider'
+import InlineEdit from '../components/ui/InlineEdit'
 import { generateCompositeDataURL } from '../hooks/useCanvasComposite'
 import { downloadDataURL } from '../utils/downloadUtils'
 import { useSoundEffects } from '../hooks/useSoundEffects'
@@ -28,7 +29,9 @@ export default function Editor() {
     walls, activeWallId, activeCutoutId,
     activeTool, variations,
     activePanel, setActivePanel,
-    saveVariation, soundEnabled, toggleSound
+    projectName, setProjectName,
+    saveVariation, updateVariation, editingVariationId,
+    soundEnabled, toggleSound
   } = useEditorStore()
 
   const { playSuccess, playClick } = useSoundEffects()
@@ -42,6 +45,8 @@ export default function Editor() {
   const [downloadToast, setDownloadToast] = useState(false)
   const [showCredits, setShowCredits] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 })
+
+  const closedWallsCount = walls.filter(w => w.closed).length
 
   // Redirect if no image
   useEffect(() => {
@@ -88,10 +93,15 @@ export default function Editor() {
     setIsSaving(true)
     playClick()
     try {
-      // Force generating a fresh composite instead of reusing an old one
       const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
       if (url) {
-        saveVariation(url)
+        // If we loaded an existing variation for editing, update it in place.
+        // Otherwise append a brand-new variation to the gallery.
+        if (editingVariationId) {
+          updateVariation(editingVariationId, url)
+        } else {
+          saveVariation(url)
+        }
         setSavedToast(true)
         playSuccess()
         setTimeout(() => setSavedToast(false), 4000)
@@ -105,7 +115,7 @@ export default function Editor() {
     } finally {
       setIsSaving(false)
     }
-  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, saveVariation, playClick, playSuccess])
+  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, editingVariationId, saveVariation, updateVariation, playClick, playSuccess])
 
   const handleDownload = useCallback(async () => {
     const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
@@ -131,8 +141,6 @@ export default function Editor() {
 
   if (!image) return null
 
-  const closedWallsCount = walls.filter(w => w.closed).length
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -155,10 +163,15 @@ export default function Editor() {
           Home
         </button>
 
-        {/* Logo */}
-        <div className="flex items-center gap-1.5 border-l border-sand-200 pl-3">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs">W</div>
-          <span className="font-display font-600 text-gray-800 text-sm hidden sm:block">Wall Paint Preview</span>
+        {/* Logo and Project Name */}
+        <div className="flex items-center gap-2 border-l border-sand-200 pl-3">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs shrink-0">W</div>
+          <span className="font-display font-600 text-gray-800 text-sm hidden sm:block truncate max-w-[200px]">
+            <InlineEdit 
+              value={projectName} 
+              onSave={setProjectName} 
+            />
+          </span>
         </div>
 
         <div className="flex-1" />
@@ -252,7 +265,7 @@ export default function Editor() {
         {/* Gallery */}
         <button
           id="go-to-gallery"
-          onClick={() => navigate('/gallery')}
+          onClick={() => navigate('/gallery', { state: { from: 'editor' } })}
           className="btn-ghost text-sm py-2"
           title="Gallery"
         >
@@ -426,7 +439,7 @@ export default function Editor() {
             <span className="text-green-400">✓</span>
             Variation saved to gallery
             <button
-              onClick={() => navigate('/gallery')}
+              onClick={() => navigate('/gallery', { state: { from: 'editor' } })}
               className="ml-2 text-brand-300 hover:text-brand-200 font-medium transition-colors"
             >
               View →

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { useEditorStore } from '../store/editorStore'
 import CreditsModal from '../components/ui/CreditsModal'
+import ProjectNameModal from '../components/ui/ProjectNameModal'
 
 const PAINT_SWATCHES = [
   '#FFFFFF', '#F5E6D0', '#EDD9B8', '#E8C8A0',
@@ -139,6 +140,8 @@ export default function Landing() {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
   const [showCredits, setShowCredits] = useState(false)
+  const [showProjectModal, setShowProjectModal] = useState(false)
+  const [pendingImageInfo, setPendingImageInfo] = useState(null)
 
   // Smooth spring mouse parallax
   const rawMouseX = useMotionValue(0)
@@ -165,13 +168,49 @@ export default function Landing() {
       const dataURL = e.target.result
       const img = new Image()
       img.onload = () => {
-        setImage(dataURL, img.naturalWidth, img.naturalHeight)
-        navigate('/editor')
+        setPendingImageInfo({ dataURL, w: img.naturalWidth, h: img.naturalHeight })
+        setShowProjectModal(true)
       }
       img.src = dataURL
     }
     reader.readAsDataURL(file)
-  }, [navigate, setImage])
+  }, [])
+
+  // Load the bundled demo room image without requiring a file upload.
+  // This is also used by automated browser tests to bypass the OS file dialog.
+  const handleDemoRoom = useCallback(async () => {
+    try {
+      const res = await fetch('/demo-room.png')
+      const blob = await res.blob()
+      const dataURL = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.readAsDataURL(blob)
+      })
+      const img = new Image()
+      img.onload = () => {
+        setPendingImageInfo({ dataURL, w: img.naturalWidth, h: img.naturalHeight })
+        setShowProjectModal(true)
+      }
+      img.src = dataURL
+    } catch (err) {
+      console.error('Demo room load failed:', err)
+    }
+  }, [])
+
+  const handleProjectNameConfirm = (name) => {
+    if (pendingImageInfo) {
+      setImage(pendingImageInfo.dataURL, pendingImageInfo.w, pendingImageInfo.h, name)
+      setShowProjectModal(false)
+      setPendingImageInfo(null)
+      navigate('/editor')
+    }
+  }
+
+  const handleProjectNameCancel = () => {
+    setShowProjectModal(false)
+    setPendingImageInfo(null)
+  }
 
   const onDrop = useCallback((e) => {
     e.preventDefault()
@@ -303,6 +342,20 @@ export default function Landing() {
           >
             JPG or PNG · up to 10 MB
           </motion.p>
+
+          {/* Demo shortcut */}
+          <motion.button
+            id="try-demo-room"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={handleDemoRoom}
+            className="mt-4 text-sm text-brand-600 hover:text-brand-700 underline underline-offset-2 transition-colors"
+          >
+            or try with a demo room →
+          </motion.button>
         </div>
 
         {/* Right — upload zone */}
@@ -455,6 +508,12 @@ export default function Landing() {
       </footer>
 
       <CreditsModal isOpen={showCredits} onClose={() => setShowCredits(false)} />
+
+      <ProjectNameModal 
+        isOpen={showProjectModal}
+        onClose={handleProjectNameCancel}
+        onConfirm={handleProjectNameConfirm}
+      />
 
       <input
         ref={fileInputRef}
