@@ -31,7 +31,8 @@ export default function Editor() {
     activePanel, setActivePanel,
     projectName, setProjectName,
     saveVariation, updateVariation, editingVariationId,
-    soundEnabled, toggleSound
+    soundEnabled, toggleSound,
+    lightingMode
   } = useEditorStore()
 
   const { playSuccess, playClick } = useSoundEffects()
@@ -68,7 +69,7 @@ export default function Editor() {
     if (!image) return null
     setIsGenerating(true)
     try {
-      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, lightingMode)
       setCompositeUrl(url)
       return url
     } catch (err) {
@@ -77,7 +78,7 @@ export default function Editor() {
     } finally {
       setIsGenerating(false)
     }
-  }, [image, imageWidth, imageHeight, walls])
+  }, [image, imageWidth, imageHeight, walls, lightingMode])
 
   const handleCompare = useCallback(async () => {
     if (mode === 'compare') {
@@ -93,7 +94,7 @@ export default function Editor() {
     setIsSaving(true)
     playClick()
     try {
-      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, lightingMode)
       if (url) {
         // If we loaded an existing variation for editing, update it in place.
         // Otherwise append a brand-new variation to the gallery.
@@ -115,10 +116,10 @@ export default function Editor() {
     } finally {
       setIsSaving(false)
     }
-  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, editingVariationId, saveVariation, updateVariation, playClick, playSuccess])
+  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, editingVariationId, saveVariation, updateVariation, playClick, playSuccess, lightingMode])
 
   const handleDownload = useCallback(async () => {
-    const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+    const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, lightingMode)
     if (url) {
       downloadDataURL(url, 'wall-preview')
       
@@ -137,7 +138,7 @@ export default function Editor() {
         setTimeout(() => setDownloadToast(false), 5000) // Show for 5s
       }
     }
-  }, [image, imageWidth, imageHeight, walls])
+  }, [image, imageWidth, imageHeight, walls, lightingMode])
 
   if (!image) return null
 

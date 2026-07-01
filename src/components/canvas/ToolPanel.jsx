@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useEditorStore } from '../../store/editorStore'
+import { LIGHTING_PRESETS } from '../../utils/lightingUtils'
 
 const TOOLS = [
   {
@@ -45,6 +46,7 @@ export default function ToolPanel() {
     resetActiveWallPoints, undoLastPoint,
     addCutout, deleteLastCutout,
     updateWall,
+    lightingMode, setLightingMode,
   } = useEditorStore()
 
   const activeWall = walls.find(w => w.id === activeWallId)
@@ -180,6 +182,40 @@ export default function ToolPanel() {
           </span>
         </motion.div>
       )}
+
+      <div className="my-1 border-t border-sand-100" />
+
+      {/* Lighting section */}
+      <div className="flex flex-col gap-1 items-center w-full px-1">
+        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider select-none mb-1">Light</span>
+        <div className="grid grid-cols-2 gap-1 w-full">
+          {Object.values(LIGHTING_PRESETS).map(preset => {
+            const isActive = lightingMode === preset.id
+            return (
+              <motion.button
+                key={preset.id}
+                id={`light-preset-${preset.id}`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                onClick={() => setLightingMode(preset.id)}
+                className={`flex items-center justify-center gap-1.5 px-2 py-1 rounded-full text-[10px] transition-all duration-200 cursor-pointer select-none border ${
+                  isActive
+                    ? 'bg-brand-500 text-white border-brand-500 shadow-glow'
+                    : 'bg-sand-50 text-gray-600 border-sand-200 hover:bg-sand-100 hover:text-gray-800'
+                }`}
+                style={{
+                  boxShadow: isActive ? '0 0 10px rgba(212, 129, 58, 0.4)' : 'none'
+                }}
+                title={preset.fullLabel ?? preset.label}
+              >
+                <span className="text-xs shrink-0">{preset.icon}</span>
+                <span className="font-semibold leading-none text-[9px] truncate max-w-[32px]">{preset.label}</span>
+              </motion.button>
+            )
+          })}
+        </div>
+      </div>
     </motion.div>
   )
 }

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Group, Shape } from 'react-konva'
 import { useEditorStore } from '../../store/editorStore'
+import { LIGHTING_PRESETS, drawLightingOverlays, hasLightingEffect } from '../../utils/lightingUtils'
 
 const MIN_SCALE = 0.3
 const MAX_SCALE = 5
@@ -37,6 +38,68 @@ function scalePoints(points, scale, pos) {
   return out
 }
 
+function useAnimatedLighting(lightingMode) {
+  const [animatedValues, setAnimatedValues] = useState({
+    tintR: 0, tintG: 0, tintB: 0, tintA: 0,
+    screenA: 0,
+    multiplyR: 255, multiplyG: 255, multiplyB: 255, multiplyA: 0,
+    overlayR: 0, overlayG: 0, overlayB: 0, overlayA: 0
+  })
+
+  const currentRef = useRef({ ...animatedValues })
+  const requestRef = useRef()
+  const targetRef = useRef()
+
+  const config = LIGHTING_PRESETS[lightingMode] || LIGHTING_PRESETS.neutral
+  targetRef.current = config
+
+  useEffect(() => {
+    const start = performance.now()
+    const duration = 400 // 400ms transition
+
+    const startValues = { ...currentRef.current }
+
+    const animate = (time) => {
+      const elapsed = time - start
+      const progress = Math.min(elapsed / duration, 1)
+      
+      // Ease out quad
+      const ease = progress * (2 - progress)
+
+      const next = {
+        tintR: startValues.tintR + (config.tintR - startValues.tintR) * ease,
+        tintG: startValues.tintG + (config.tintG - startValues.tintG) * ease,
+        tintB: startValues.tintB + (config.tintB - startValues.tintB) * ease,
+        tintA: startValues.tintA + (config.tintA - startValues.tintA) * ease,
+        screenA: startValues.screenA + (config.screenA - startValues.screenA) * ease,
+        multiplyR: startValues.multiplyR + (config.multiplyR - startValues.multiplyR) * ease,
+        multiplyG: startValues.multiplyG + (config.multiplyG - startValues.multiplyG) * ease,
+        multiplyB: startValues.multiplyB + (config.multiplyB - startValues.multiplyB) * ease,
+        multiplyA: startValues.multiplyA + (config.multiplyA - startValues.multiplyA) * ease,
+        overlayR: startValues.overlayR + (config.overlayR - startValues.overlayR) * ease,
+        overlayG: startValues.overlayG + (config.overlayG - startValues.overlayG) * ease,
+        overlayB: startValues.overlayB + (config.overlayB - startValues.overlayB) * ease,
+        overlayA: startValues.overlayA + (config.overlayA - startValues.overlayA) * ease,
+      }
+
+      currentRef.current = next
+      setAnimatedValues(next)
+
+      if (progress < 1) {
+        requestRef.current = requestAnimationFrame(animate)
+      }
+    }
+
+    requestRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+    }
+  }, [lightingMode]) // eslint-disable-line
+
+  return animatedValues
+}
+
 export default function EditorCanvas({ containerRef }) {
   const stageRef = useRef(null)
   const [konvaImage, setKonvaImage] = useState(null)
@@ -52,8 +115,10 @@ export default function EditorCanvas({ containerRef }) {
     addPointToActiveWall, closeActiveWall,
     addPointToActiveCutout, closeActiveCutout,
     undoLastPoint,
+    lightingMode,
   } = useEditorStore()
 
+  const animatedLighting = useAnimatedLighting(lightingMode)
   const wallpaperImageMap = useWallpaperImages(walls)
 
   // Load base photo
@@ -228,6 +293,7 @@ export default function EditorCanvas({ containerRef }) {
                   patternImg={patternImg}
                   tileSize={120 * (wall.wallpaperScale ?? 1) * scale}
                   opacity={wall.wallpaperOpacity ?? 0.85}
+                  animatedLighting={animatedLighting}
                 />
               )
             }
@@ -242,6 +308,7 @@ export default function EditorCanvas({ containerRef }) {
                   color="#e0c8a0"
                   opacity={0.3}
                   multiply={false}
+                  animatedLighting={animatedLighting}
                 />
               )
             }
@@ -254,6 +321,7 @@ export default function EditorCanvas({ containerRef }) {
                 color={wall.color ?? '#F5E6D0'}
                 opacity={wall.opacity ?? 0.6}
                 multiply
+                animatedLighting={animatedLighting}
               />
             )
           })}
@@ -364,7 +432,7 @@ export default function EditorCanvas({ containerRef }) {
  * Renders a solid color overlay with even-odd cutout holes.
  * Uses a custom Konva Shape sceneFunc so we can call ctx.fill('evenodd').
  */
-function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
+function ColorShape({ scaledPoints, cutouts, color, opacity, multiply, animatedLighting }) {
   const sceneFunc = useCallback((ctx, shape) => {
     ctx.save()
     if (multiply) {
@@ -380,8 +448,27 @@ function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
     ctx.fillStyle = color
     ctx.fill('evenodd')  // even-odd rule punches holes where cutouts overlap
 
+    // Apply animated lighting overlays clipped to wall shape only
+    if (animatedLighting && hasLightingEffect(animatedLighting)) {
+      ctx.beginPath()
+      tracePath(ctx, scaledPoints)
+      for (const cp of cutouts) tracePath(ctx, cp)
+      ctx.clip('evenodd')
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (let i = 0; i < scaledPoints.length; i += 2) {
+        minX = Math.min(minX, scaledPoints[i])
+        minY = Math.min(minY, scaledPoints[i + 1])
+        maxX = Math.max(maxX, scaledPoints[i])
+        maxY = Math.max(maxY, scaledPoints[i + 1])
+      }
+      if (minX !== Infinity) {
+        drawLightingOverlays(ctx, minX, minY, maxX - minX, maxY - minY, animatedLighting)
+      }
+    }
+
     ctx.restore()
-  }, [scaledPoints, cutouts, color, opacity, multiply])
+  }, [scaledPoints, cutouts, color, opacity, multiply, animatedLighting])
 
   return (
     <Shape
@@ -395,7 +482,7 @@ function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
 /**
  * Renders a tiled wallpaper pattern with even-odd cutout holes.
  */
-function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity }) {
+function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity, animatedLighting }) {
   const sceneFunc = useCallback((ctx, shape) => {
     ctx.save()
 
@@ -432,8 +519,22 @@ function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity }
     ctx.fillStyle = '#888888'
     ctx.fillRect(0, 0, 99999, 99999)
 
+    // Apply animated lighting overlays inside the clipped wall region
+    if (animatedLighting && hasLightingEffect(animatedLighting)) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (let i = 0; i < scaledPoints.length; i += 2) {
+        minX = Math.min(minX, scaledPoints[i])
+        minY = Math.min(minY, scaledPoints[i + 1])
+        maxX = Math.max(maxX, scaledPoints[i])
+        maxY = Math.max(maxY, scaledPoints[i + 1])
+      }
+      if (minX !== Infinity) {
+        drawLightingOverlays(ctx, minX, minY, maxX - minX, maxY - minY, animatedLighting)
+      }
+    }
+
     ctx.restore()
-  }, [scaledPoints, cutouts, patternImg, tileSize, opacity])
+  }, [scaledPoints, cutouts, patternImg, tileSize, opacity, animatedLighting])
 
   return (
     <Shape

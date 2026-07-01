@@ -34,8 +34,10 @@ export const useEditorStore = create(
       imageHeight: 0,
       projectName: 'Untitled Project',
       soundEnabled: false,
+      lightingMode: 'neutral',
 
       setProjectName: (name) => set({ projectName: name?.trim() || 'Untitled Project' }),
+      setLightingMode: (mode) => set({ lightingMode: mode }),
 
       setImage: (dataURL, w, h, initialProjectName) =>
         set({
@@ -47,6 +49,7 @@ export const useEditorStore = create(
           activeWallId: null,
           activeCutoutId: null,
           editingVariationId: null,
+          lightingMode: 'neutral',
         }),
 
       toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
@@ -225,7 +228,7 @@ export const useEditorStore = create(
       variations: [],
 
       saveVariation: (snapshotDataURL) => {
-        const { walls, imageWidth, imageHeight, projectName } = get();
+        const { walls, imageWidth, imageHeight, projectName, lightingMode } = get();
         // FIX: Do NOT store `originalImage` (the full data URL) inside the variation.
         const safeWalls = Array.isArray(walls) ? JSON.parse(JSON.stringify(walls)) : [];
         const variation = {
@@ -235,6 +238,7 @@ export const useEditorStore = create(
           imageWidth:  imageWidth  ?? 0,
           imageHeight: imageHeight ?? 0,
           walls:       safeWalls,
+          lightingMode: lightingMode || 'neutral',
           createdAt:   new Date().toISOString(),
         };
 
@@ -249,7 +253,7 @@ export const useEditorStore = create(
       // Uses .map() to produce a brand-new array so Zustand detects the change
       // and the persist middleware serializes it to localStorage.
       updateVariation: (varId, snapshotDataURL) => {
-        const { walls, imageWidth, imageHeight, projectName } = get();
+        const { walls, imageWidth, imageHeight, projectName, lightingMode } = get();
         const safeWalls = Array.isArray(walls) ? JSON.parse(JSON.stringify(walls)) : [];
         set(s => ({
           variations: (Array.isArray(s.variations) ? s.variations : []).map(v =>
@@ -261,6 +265,7 @@ export const useEditorStore = create(
                   walls:       safeWalls,
                   imageWidth:  imageWidth  ?? v.imageWidth,
                   imageHeight: imageHeight ?? v.imageHeight,
+                  lightingMode: lightingMode ?? v.lightingMode ?? 'neutral',
                   updatedAt:   new Date().toISOString(),
                 }
               : v
@@ -295,6 +300,7 @@ export const useEditorStore = create(
           imageHeight:        v.imageHeight || currentH,
           activeCutoutId:     null,
           editingVariationId: varId, // signals Save to call updateVariation
+          lightingMode:       v.lightingMode || 'neutral',
         });
       },
 
@@ -323,6 +329,7 @@ export const useEditorStore = create(
         projectName:  state.projectName,
         walls:        state.walls,
         soundEnabled: state.soundEnabled,
+        lightingMode: state.lightingMode,
         // editingVariationId is ephemeral — intentionally NOT persisted
       }),
 
@@ -331,7 +338,7 @@ export const useEditorStore = create(
       migrate: (persistedState, version) => {
         const safe = persistedState ?? {};
 
-        // Migrate old variations to have a projectName
+        // Migrate old variations to have a projectName and lightingMode
         const variations = Array.isArray(safe.variations)
           ? safe.variations.map(v => {
               if (!v || typeof v !== 'object') return null;
@@ -344,6 +351,7 @@ export const useEditorStore = create(
                 imageHeight: rest.imageHeight ?? safe.imageHeight ?? 0,
                 createdAt:   rest.createdAt   ?? new Date().toISOString(),
                 walls:       Array.isArray(rest.walls) ? rest.walls : [],
+                lightingMode: rest.lightingMode || 'neutral',
               };
             }).filter(Boolean)
           : [];
@@ -356,6 +364,7 @@ export const useEditorStore = create(
           imageHeight:  safe.imageHeight ?? 0,
           projectName:  safe.projectName || 'Untitled Project',
           soundEnabled: safe.soundEnabled ?? false,
+          lightingMode: safe.lightingMode || 'neutral',
         };
       },
 

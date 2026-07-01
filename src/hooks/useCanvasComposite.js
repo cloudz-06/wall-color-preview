@@ -1,4 +1,5 @@
 import { hexToRgb } from '../utils/colorUtils'
+import { LIGHTING_PRESETS, drawLightingOverlays } from '../utils/lightingUtils'
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -27,7 +28,7 @@ function tracePath(ctx, points) {
 }
 
 /** Apply color overlay (multiply) with even-odd cutout holes */
-function applyColor(ctx, wall, w, h) {
+function applyColor(ctx, wall, w, h, lightingMode) {
   if (!wall.points || wall.points.length < 6) return
   const { r, g, b } = hexToRgb(wall.color ?? '#F5E6D0')
 
@@ -40,11 +41,24 @@ function applyColor(ctx, wall, w, h) {
   ctx.fillStyle = `rgb(${r},${g},${b})`
   ctx.fillRect(0, 0, w, h)
 
+  if (lightingMode && lightingMode !== 'neutral') {
+    const vals = LIGHTING_PRESETS[lightingMode]
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (let i = 0; i < wall.points.length; i += 2) {
+      minX = Math.min(minX, wall.points[i])
+      minY = Math.min(minY, wall.points[i + 1])
+      maxX = Math.max(maxX, wall.points[i])
+      maxY = Math.max(maxY, wall.points[i + 1])
+    }
+    if (minX === Infinity) { minX = 0; minY = 0; maxX = w; maxY = h; }
+    drawLightingOverlays(ctx, minX, minY, maxX - minX, maxY - minY, vals)
+  }
+
   ctx.restore()
 }
 
 /** Apply wallpaper pattern with even-odd cutout holes */
-function applyWallpaper(ctx, wall, w, h, patternImg) {
+function applyWallpaper(ctx, wall, w, h, patternImg, lightingMode) {
   if (!wall.points || wall.points.length < 6 || !patternImg) return
 
   const wallpaperScale = wall.wallpaperScale ?? 1
@@ -74,6 +88,19 @@ function applyWallpaper(ctx, wall, w, h, patternImg) {
   ctx.fillStyle = '#888888'
   ctx.fillRect(0, 0, w, h)
 
+  if (lightingMode && lightingMode !== 'neutral') {
+    const vals = LIGHTING_PRESETS[lightingMode]
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (let i = 0; i < wall.points.length; i += 2) {
+      minX = Math.min(minX, wall.points[i])
+      minY = Math.min(minY, wall.points[i + 1])
+      maxX = Math.max(maxX, wall.points[i])
+      maxY = Math.max(maxY, wall.points[i + 1])
+    }
+    if (minX === Infinity) { minX = 0; minY = 0; maxX = w; maxY = h; }
+    drawLightingOverlays(ctx, minX, minY, maxX - minX, maxY - minY, vals)
+  }
+
   ctx.restore()
 }
 
@@ -81,7 +108,7 @@ function applyWallpaper(ctx, wall, w, h, patternImg) {
  * Generate a full-resolution composite PNG dataURL.
  * Correctly handles cutouts via even-odd clipping.
  */
-export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls) {
+export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls, lightingMode = 'neutral') {
   const baseImg = await loadImage(image)
 
   // Pre-load all wallpaper images in parallel
@@ -105,9 +132,9 @@ export async function generateCompositeDataURL(image, imageWidth, imageHeight, w
   for (const wall of walls) {
     if (!wall.closed || !wall.points || wall.points.length < 6) continue
     if (wall.mode === 'wallpaper' && wall.wallpaperUrl) {
-      applyWallpaper(ctx, wall, imageWidth, imageHeight, wallpaperImgMap[wall.wallpaperUrl])
+      applyWallpaper(ctx, wall, imageWidth, imageHeight, wallpaperImgMap[wall.wallpaperUrl], lightingMode)
     } else {
-      applyColor(ctx, wall, imageWidth, imageHeight)
+      applyColor(ctx, wall, imageWidth, imageHeight, lightingMode)
     }
   }
 
