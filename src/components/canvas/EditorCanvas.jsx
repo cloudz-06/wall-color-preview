@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Group, Shape } from 'react-konva'
 import { useEditorStore } from '../../store/editorStore'
+import { applyWindowLighting } from '../../utils/windowLightingUtils'
 
 const MIN_SCALE = 0.3
 const MAX_SCALE = 5
@@ -48,8 +49,10 @@ export default function EditorCanvas({ containerRef }) {
   const {
     image, imageWidth, imageHeight,
     walls, activeWallId, activeCutoutId,
+    windows, activeWindowId,
     activeTool,
     addPointToActiveWall, closeActiveWall,
+    addPointToActiveWindow, closeActiveWindow,
     addPointToActiveCutout, closeActiveCutout,
     undoLastPoint,
   } = useEditorStore()
@@ -136,25 +139,46 @@ export default function EditorCanvas({ containerRef }) {
       return
     }
 
-    // ── POLYGON mode ─────────────────────────────────────
-    if (activeTool !== 'polygon') return
-    if (!activeWallId) return
-    const activeWall = walls.find(w => w.id === activeWallId)
-    if (!activeWall || activeWall.closed) return
+    // ── POLYGON mode (walls) ─────────────────────────────────────
+    if (activeTool === 'polygon') {
+      if (!activeWallId) return
+      const activeWall = walls.find(w => w.id === activeWallId)
+      if (!activeWall || activeWall.closed) return
 
-    // Close if clicking near first vertex
-    if (activeWall.points.length >= 6) {
-      const fx = activeWall.points[0] * scale + position.x
-      const fy = activeWall.points[1] * scale + position.y
-      if (Math.sqrt((pos.x - fx) ** 2 + (pos.y - fy) ** 2) < 12) {
-        closeActiveWall()
-        return
+      // Close if clicking near first vertex
+      if (activeWall.points.length >= 6) {
+        const fx = activeWall.points[0] * scale + position.x
+        const fy = activeWall.points[1] * scale + position.y
+        if (Math.sqrt((pos.x - fx) ** 2 + (pos.y - fy) ** 2) < 12) {
+          closeActiveWall()
+          return
+        }
       }
+      addPointToActiveWall(imgCoords.x, imgCoords.y)
+      return
     }
-    addPointToActiveWall(imgCoords.x, imgCoords.y)
+
+    // ── WINDOW mode ──────────────────────────────────────────────
+    if (activeTool === 'window') {
+      if (!activeWindowId) return
+      const activeWindow = windows.find(w => w.id === activeWindowId)
+      if (!activeWindow || activeWindow.closed) return
+
+      if (activeWindow.points.length >= 6) {
+        const fx = activeWindow.points[0] * scale + position.x
+        const fy = activeWindow.points[1] * scale + position.y
+        if (Math.sqrt((pos.x - fx) ** 2 + (pos.y - fy) ** 2) < 12) {
+          closeActiveWindow()
+          return
+        }
+      }
+      addPointToActiveWindow(imgCoords.x, imgCoords.y)
+      return
+    }
   }, [
-    activeTool, activeWallId, activeCutoutId, walls, scale, position, toImageCoords,
+    activeTool, activeWallId, activeCutoutId, activeWindowId, walls, windows, scale, position, toImageCoords,
     addPointToActiveWall, closeActiveWall,
+    addPointToActiveWindow, closeActiveWindow,
     addPointToActiveCutout, closeActiveCutout,
   ])
 
@@ -163,12 +187,16 @@ export default function EditorCanvas({ containerRef }) {
       const w = walls.find(x => x.id === activeWallId)
       if (w && !w.closed && w.points.length >= 6) closeActiveWall()
     }
+    if (activeTool === 'window' && activeWindowId) {
+      const w = windows.find(x => x.id === activeWindowId)
+      if (w && !w.closed && w.points.length >= 6) closeActiveWindow()
+    }
     if (activeTool === 'cutout' && activeCutoutId) {
       const w = walls.find(x => x.id === activeWallId)
       const c = w?.cutouts.find(x => x.id === activeCutoutId)
       if (c && !c.closed && c.points.length >= 6) closeActiveCutout()
     }
-  }, [activeTool, activeWallId, activeCutoutId, walls, closeActiveWall, closeActiveCutout])
+  }, [activeTool, activeWallId, activeCutoutId, activeWindowId, walls, windows, closeActiveWall, closeActiveCutout, closeActiveWindow])
 
   const handleMouseMove = useCallback((e) => {
     const pos = stageRef.current.getPointerPosition()
@@ -228,6 +256,9 @@ export default function EditorCanvas({ containerRef }) {
                   patternImg={patternImg}
                   tileSize={120 * (wall.wallpaperScale ?? 1) * scale}
                   opacity={wall.wallpaperOpacity ?? 0.85}
+                  windows={windows}
+                  scale={scale}
+                  position={position}
                 />
               )
             }
@@ -242,6 +273,9 @@ export default function EditorCanvas({ containerRef }) {
                   color="#e0c8a0"
                   opacity={0.3}
                   multiply={false}
+                  windows={windows}
+                  scale={scale}
+                  position={position}
                 />
               )
             }
@@ -254,6 +288,9 @@ export default function EditorCanvas({ containerRef }) {
                 color={wall.color ?? '#F5E6D0'}
                 opacity={wall.opacity ?? 0.6}
                 multiply
+                windows={windows}
+                scale={scale}
+                position={position}
               />
             )
           })}
@@ -354,6 +391,66 @@ export default function EditorCanvas({ containerRef }) {
               </Group>
             )
           })}
+          
+          {/* Windows Outlines and Glass Overlay */}
+          {windows.map(window => {
+            if (!window.points || window.points.length < 2) return null
+            const sp = scalePoints(window.points, scale, position)
+            const isActive = window.id === activeWindowId
+
+            return (
+              <Group key={`win-${window.id}`}>
+                {window.closed && (
+                  <ColorShape
+                    scaledPoints={sp}
+                    cutouts={[]}
+                    color="#ffffff"
+                    opacity={0.15}
+                    multiply={false}
+                  />
+                )}
+                
+                {/* Window outline */}
+                <Line
+                  points={sp}
+                  closed={window.closed}
+                  stroke={isActive ? '#3b82f6' : '#93c5fd'}
+                  strokeWidth={isActive ? 2 : 1.5}
+                  dash={window.closed ? [] : [6, 4]}
+                  fill="transparent"
+                  perfectDrawEnabled={false}
+                />
+
+                {/* Vertex dots */}
+                {isActive && !window.closed && window.points.map((_, idx) => {
+                  if (idx % 2 !== 0) return null
+                  const vx = window.points[idx] * scale + position.x
+                  const vy = window.points[idx + 1] * scale + position.y
+                  return (
+                    <Circle key={idx} x={vx} y={vy}
+                      radius={idx === 0 ? 7 : 4}
+                      fill={idx === 0 ? '#3b82f6' : 'white'}
+                      stroke={idx === 0 ? 'white' : '#3b82f6'}
+                      strokeWidth={2}
+                    />
+                  )
+                })}
+
+                {/* Ghost line */}
+                {isActive && !window.closed && activeTool === 'window' && window.points.length >= 2 && (
+                  <Line
+                    points={[
+                      window.points[window.points.length - 2] * scale + position.x,
+                      window.points[window.points.length - 1] * scale + position.y,
+                      mousePos.x, mousePos.y,
+                    ]}
+                    stroke="#3b82f6" strokeWidth={1.5} dash={[4, 4]} opacity={0.6}
+                    perfectDrawEnabled={false}
+                  />
+                )}
+              </Group>
+            )
+          })}
         </Layer>
       </Stage>
     </div>
@@ -364,7 +461,7 @@ export default function EditorCanvas({ containerRef }) {
  * Renders a solid color overlay with even-odd cutout holes.
  * Uses a custom Konva Shape sceneFunc so we can call ctx.fill('evenodd').
  */
-function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
+function ColorShape({ scaledPoints, cutouts, color, opacity, multiply, windows, scale, position }) {
   const sceneFunc = useCallback((ctx, shape) => {
     ctx.save()
     if (multiply) {
@@ -379,9 +476,15 @@ function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
 
     ctx.fillStyle = color
     ctx.fill('evenodd')  // even-odd rule punches holes where cutouts overlap
+    
+    // Apply lighting overlay if windows are provided
+    if (windows && windows.length > 0) {
+      ctx.clip('evenodd') // restrict lighting gradient to just the wall/cutout shape
+      applyWindowLighting(ctx, scaledPoints, windows, scale, position)
+    }
 
     ctx.restore()
-  }, [scaledPoints, cutouts, color, opacity, multiply])
+  }, [scaledPoints, cutouts, color, opacity, multiply, windows, scale, position])
 
   return (
     <Shape
@@ -395,7 +498,7 @@ function ColorShape({ scaledPoints, cutouts, color, opacity, multiply }) {
 /**
  * Renders a tiled wallpaper pattern with even-odd cutout holes.
  */
-function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity }) {
+function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity, windows, scale, position }) {
   const sceneFunc = useCallback((ctx, shape) => {
     ctx.save()
 
@@ -431,9 +534,14 @@ function WallpaperShape({ scaledPoints, cutouts, patternImg, tileSize, opacity }
     ctx.globalAlpha = 0.35
     ctx.fillStyle = '#888888'
     ctx.fillRect(0, 0, 99999, 99999)
+    
+    // Apply lighting overlay if windows are provided
+    if (windows && windows.length > 0) {
+      applyWindowLighting(ctx, scaledPoints, windows, scale, position)
+    }
 
     ctx.restore()
-  }, [scaledPoints, cutouts, patternImg, tileSize, opacity])
+  }, [scaledPoints, cutouts, patternImg, tileSize, opacity, windows, scale, position])
 
   return (
     <Shape
@@ -456,6 +564,7 @@ function tracePath(ctx, points) {
 function getCursor(tool) {
   switch (tool) {
     case 'polygon': return 'crosshair'
+    case 'window':  return 'crosshair'
     case 'cutout':  return 'cell'
     case 'eraser':  return 'not-allowed'
     case 'pan':     return 'grab'

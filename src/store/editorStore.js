@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 let wallIdCounter = 0;
 let cutoutIdCounter = 0;
+let windowIdCounter = 0;
 
 const createCutout = () => ({
   id: `cutout-${++cutoutIdCounter}`,
@@ -25,6 +26,14 @@ const createWall = (overrides = {}) => ({
   ...overrides,
 });
 
+const createWindow = (overrides = {}) => ({
+  id: `window-${++windowIdCounter}`,
+  label: `Window ${windowIdCounter}`,
+  points: [],
+  closed: false,
+  ...overrides,
+});
+
 export const useEditorStore = create(
   persist(
     (set, get) => ({
@@ -44,7 +53,9 @@ export const useEditorStore = create(
           imageHeight: h,
           projectName: initialProjectName || 'Untitled Project',
           walls: [],
+          windows: [],
           activeWallId: null,
+          activeWindowId: null,
           activeCutoutId: null,
           editingVariationId: null,
         }),
@@ -54,6 +65,10 @@ export const useEditorStore = create(
       // ── Walls ──────────────────────────────────────────────
       walls: [],
       activeWallId: null,
+
+      // ── Windows ────────────────────────────────────────────
+      windows: [],
+      activeWindowId: null,
 
       addWall: () => {
         const wall = createWall();
@@ -96,8 +111,53 @@ export const useEditorStore = create(
         });
       },
 
+      addWindow: () => {
+        const win = createWindow();
+        set(s => ({ windows: [...s.windows, win], activeWindowId: win.id, activeWallId: null, activeCutoutId: null }));
+        return win.id;
+      },
+
+      deleteWindow: (id) =>
+        set(s => {
+          const windows = s.windows.filter(w => w.id !== id);
+          const activeWindowId = s.activeWindowId === id ? (windows[0]?.id ?? null) : s.activeWindowId;
+          return { windows, activeWindowId };
+        }),
+
+      setActiveWindow: (id) => set({ activeWindowId: id, activeWallId: null, activeCutoutId: null }),
+
+      addPointToActiveWindow: (x, y) => {
+        const { windows, activeWindowId } = get();
+        set({
+          windows: windows.map(w =>
+            w.id === activeWindowId ? { ...w, points: [...w.points, x, y] } : w
+          ),
+        });
+      },
+
+      closeActiveWindow: () => {
+        const { windows, activeWindowId } = get();
+        set({
+          windows: windows.map(w =>
+            w.id === activeWindowId ? { ...w, closed: true } : w
+          ),
+        });
+      },
+
       undoLastPoint: () => {
-        const { walls, activeWallId, activeCutoutId } = get();
+        const { walls, windows, activeWallId, activeWindowId, activeCutoutId, activeTool } = get();
+        
+        if (activeTool === 'window' && activeWindowId) {
+          set({
+            windows: windows.map(w =>
+              w.id === activeWindowId && !w.closed
+                ? { ...w, points: w.points.slice(0, -2) }
+                : w
+            ),
+          });
+          return;
+        }
+
         if (activeCutoutId) {
           set({
             walls: walls.map(w => w.id === activeWallId
@@ -112,7 +172,7 @@ export const useEditorStore = create(
               : w
             ),
           });
-        } else {
+        } else if (activeWallId) {
           set({
             walls: walls.map(w =>
               w.id === activeWallId && !w.closed
@@ -132,6 +192,17 @@ export const useEditorStore = create(
               : w
           ),
           activeCutoutId: null,
+        });
+      },
+
+      resetActiveWindowPoints: () => {
+        const { windows, activeWindowId } = get();
+        set({
+          windows: windows.map(w =>
+            w.id === activeWindowId
+              ? { ...w, points: [], closed: false }
+              : w
+          ),
         });
       },
 
@@ -225,9 +296,16 @@ export const useEditorStore = create(
       variations: [],
 
       saveVariation: (snapshotDataURL) => {
-        const { walls, imageWidth, imageHeight, projectName } = get();
-        // FIX: Do NOT store `originalImage` (the full data URL) inside the variation.
-        const safeWalls = Array.isArray(walls) ? JSON.parse(JSON.stringify(walls)) : [];
+        const { walls, windows, imageWidth, imageHeight, projectName } = get();
+        
+        // Filter out incomplete drafts when saving
+        const safeWalls = Array.isArray(walls) 
+          ? JSON.parse(JSON.stringify(walls.filter(w => w.closed))) 
+          : [];
+        const safeWindows = Array.isArray(windows)
+          ? JSON.parse(JSON.stringify(windows.filter(w => w.closed)))
+          : [];
+          
         const variation = {
           id:          `var-${Date.now()}`,
           projectName: projectName || 'Untitled Project',
@@ -235,6 +313,7 @@ export const useEditorStore = create(
           imageWidth:  imageWidth  ?? 0,
           imageHeight: imageHeight ?? 0,
           walls:       safeWalls,
+          windows:     safeWindows,
           createdAt:   new Date().toISOString(),
         };
 
@@ -249,8 +328,14 @@ export const useEditorStore = create(
       // Uses .map() to produce a brand-new array so Zustand detects the change
       // and the persist middleware serializes it to localStorage.
       updateVariation: (varId, snapshotDataURL) => {
-        const { walls, imageWidth, imageHeight, projectName } = get();
-        const safeWalls = Array.isArray(walls) ? JSON.parse(JSON.stringify(walls)) : [];
+        const { walls, windows, imageWidth, imageHeight, projectName } = get();
+        const safeWalls = Array.isArray(walls) 
+          ? JSON.parse(JSON.stringify(walls.filter(w => w.closed))) 
+          : [];
+        const safeWindows = Array.isArray(windows)
+          ? JSON.parse(JSON.stringify(windows.filter(w => w.closed)))
+          : [];
+          
         set(s => ({
           variations: (Array.isArray(s.variations) ? s.variations : []).map(v =>
             v.id === varId
@@ -259,6 +344,7 @@ export const useEditorStore = create(
                   projectName: projectName || v.projectName,
                   snapshot:    snapshotDataURL ?? v.snapshot,
                   walls:       safeWalls,
+                  windows:     safeWindows,
                   imageWidth:  imageWidth  ?? v.imageWidth,
                   imageHeight: imageHeight ?? v.imageHeight,
                   updatedAt:   new Date().toISOString(),
@@ -290,6 +376,7 @@ export const useEditorStore = create(
         set({
           projectName:        v.projectName || 'Untitled Project',
           walls:              JSON.parse(JSON.stringify(v.walls ?? [])),
+          windows:            JSON.parse(JSON.stringify(v.windows ?? [])),
           imageWidth:         v.imageWidth  || currentW,
 
           imageHeight:        v.imageHeight || currentH,
@@ -322,6 +409,7 @@ export const useEditorStore = create(
         imageHeight:  state.imageHeight,
         projectName:  state.projectName,
         walls:        state.walls,
+        windows:      state.windows,
         soundEnabled: state.soundEnabled,
         // editingVariationId is ephemeral — intentionally NOT persisted
       }),
@@ -344,6 +432,7 @@ export const useEditorStore = create(
                 imageHeight: rest.imageHeight ?? safe.imageHeight ?? 0,
                 createdAt:   rest.createdAt   ?? new Date().toISOString(),
                 walls:       Array.isArray(rest.walls) ? rest.walls : [],
+                windows:     Array.isArray(rest.windows) ? rest.windows : [],
               };
             }).filter(Boolean)
           : [];
@@ -352,6 +441,7 @@ export const useEditorStore = create(
           ...safe,
           variations,
           walls:        Array.isArray(safe.walls) ? safe.walls : [],
+          windows:      Array.isArray(safe.windows) ? safe.windows : [],
           imageWidth:   safe.imageWidth  ?? 0,
           imageHeight:  safe.imageHeight ?? 0,
           projectName:  safe.projectName || 'Untitled Project',
@@ -364,6 +454,7 @@ export const useEditorStore = create(
         ...(persistedState ?? {}),
         // Always reset ephemeral selections on reload
         activeWallId:       null,
+        activeWindowId:     null,
         activeCutoutId:     null,
         activeTool:         'polygon',
         activePanel:        'color',

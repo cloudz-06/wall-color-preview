@@ -6,7 +6,6 @@ import EditorCanvas from '../components/canvas/EditorCanvas'
 import ToolPanel from '../components/canvas/ToolPanel'
 import ColorPanel from '../components/panels/ColorPanel'
 import WallpaperPanel from '../components/panels/WallpaperPanel'
-import MoodPresets from '../components/panels/MoodPresets'
 import ProcessingOverlay from '../components/ui/ProcessingOverlay'
 import BeforeAfterSlider from '../components/comparison/BeforeAfterSlider'
 import InlineEdit from '../components/ui/InlineEdit'
@@ -18,7 +17,6 @@ import confetti from 'canvas-confetti'
 const PANEL_TABS = [
   { id: 'color', label: '🎨 Colors' },
   { id: 'wallpaper', label: '🖼️ Wallpaper' },
-  { id: 'mood', label: '✨ Moods' },
 ]
 
 export default function Editor() {
@@ -27,6 +25,7 @@ export default function Editor() {
   const {
     image, imageWidth, imageHeight,
     walls, activeWallId, activeCutoutId,
+    windows, activeWindowId,
     activeTool, variations,
     activePanel, setActivePanel,
     projectName, setProjectName,
@@ -68,7 +67,7 @@ export default function Editor() {
     if (!image) return null
     setIsGenerating(true)
     try {
-      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows)
       setCompositeUrl(url)
       return url
     } catch (err) {
@@ -77,7 +76,7 @@ export default function Editor() {
     } finally {
       setIsGenerating(false)
     }
-  }, [image, imageWidth, imageHeight, walls])
+  }, [image, imageWidth, imageHeight, walls, windows])
 
   const handleCompare = useCallback(async () => {
     if (mode === 'compare') {
@@ -93,7 +92,7 @@ export default function Editor() {
     setIsSaving(true)
     playClick()
     try {
-      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows)
       if (url) {
         // If we loaded an existing variation for editing, update it in place.
         // Otherwise append a brand-new variation to the gallery.
@@ -115,10 +114,10 @@ export default function Editor() {
     } finally {
       setIsSaving(false)
     }
-  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, editingVariationId, saveVariation, updateVariation, playClick, playSuccess])
+  }, [closedWallsCount, isSaving, image, imageWidth, imageHeight, walls, windows, editingVariationId, saveVariation, updateVariation, playClick, playSuccess])
 
   const handleDownload = useCallback(async () => {
-    const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls)
+    const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows)
     if (url) {
       downloadDataURL(url, 'wall-preview')
       
@@ -137,7 +136,7 @@ export default function Editor() {
         setTimeout(() => setDownloadToast(false), 5000) // Show for 5s
       }
     }
-  }, [image, imageWidth, imageHeight, walls])
+  }, [image, imageWidth, imageHeight, walls, windows])
 
   if (!image) return null
 
@@ -336,6 +335,16 @@ export default function Editor() {
               Click to add points · Double-click or click the first point to close
             </motion.div>
           )}
+          
+          {mode === 'editor' && activeTool === 'window' && !windows?.find(w => w.id === activeWindowId)?.closed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 glass-panel rounded-2xl text-sm text-blue-600 border border-blue-200 pointer-events-none"
+            >
+              Click to draw a window (for lighting) · Double-click to close
+            </motion.div>
+          )}
 
           {mode === 'editor' && activeTool === 'cutout' && (
             <motion.div
@@ -407,19 +416,6 @@ export default function Editor() {
                   transition={{ duration: 0.2 }}
                 >
                   <WallpaperPanel />
-                </motion.div>
-              )}
-
-              {activePanel === 'mood' && (
-                <motion.div
-                  key="mood"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.2 }}
-                  className="h-full flex flex-col"
-                >
-                  <MoodPresets />
                 </motion.div>
               )}
             </AnimatePresence>

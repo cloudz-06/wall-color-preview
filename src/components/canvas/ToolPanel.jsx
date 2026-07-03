@@ -26,6 +26,13 @@ const TOOLS = [
     activeColor: 'bg-red-500 text-white shadow',
   },
   {
+    id: 'window',
+    label: 'Draw Window (W) — for natural light simulation',
+    icon: (
+      <span className="text-lg leading-none select-none">🪟</span>
+    ),
+  },
+  {
     id: 'pan',
     label: 'Pan / Zoom (H)',
     icon: (
@@ -41,8 +48,10 @@ export default function ToolPanel() {
   const {
     activeTool, setActiveTool,
     walls, activeWallId, activeCutoutId,
+    windows, activeWindowId,
     addWall, deleteWall, setActiveWall,
-    resetActiveWallPoints, undoLastPoint,
+    addWindow, deleteWindow, setActiveWindow,
+    resetActiveWallPoints, resetActiveWindowPoints, undoLastPoint,
     addCutout, deleteLastCutout,
     updateWall,
   } = useEditorStore()
@@ -53,6 +62,7 @@ export default function ToolPanel() {
   const handleToolClick = useCallback((id) => {
     if (id === 'eraser') {
       if (activeWallId) resetActiveWallPoints()
+      if (activeWindowId) resetActiveWindowPoints()
     } else if (id === 'cutout') {
       setActiveTool('cutout')
       if (activeWallId && wallIsClosed) {
@@ -118,17 +128,24 @@ export default function ToolPanel() {
 
       {/* Add wall */}
       <Tooltip label="Add New Wall (+)">
-        <button id="tool-add-wall" className="tool-btn" onClick={addWall}>
+        <button id="tool-add-wall" className="tool-btn" onClick={() => { setActiveTool('polygon'); addWall(); }}>
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         </button>
       </Tooltip>
+      
+      {/* Add window */}
+      <Tooltip label="Add New Window">
+        <button id="tool-add-window" className="tool-btn" onClick={() => { setActiveTool('window'); addWindow(); }}>
+          <span className="text-lg leading-none select-none">🪟<span className="text-xs absolute bottom-1 right-1 font-bold">+</span></span>
+        </button>
+      </Tooltip>
 
       {/* Wall color swatches (select wall) */}
       <div className="flex flex-col gap-1 max-h-48 overflow-y-auto hide-scrollbar">
-        {walls.map(wall => (
-          <Tooltip key={wall.id} label={`${wall.label}${wall.closed ? ' ✓' : ' (drawing…)'}`}>
+        {walls.filter(w => w.closed).map(wall => (
+          <Tooltip key={wall.id} label={`${wall.label}`}>
             <button
               id={`wall-select-${wall.id}`}
               onClick={() => { setActiveWall(wall.id); setActiveTool('polygon') }}
@@ -139,11 +156,9 @@ export default function ToolPanel() {
               }`}
               style={{ backgroundColor: wall.color }}
             >
-              {wall.closed && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 border-2 border-white" />
-              )}
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 border-2 border-white" />
               {/* Show cutout count badge */}
-              {wall.closed && (wall.cutouts?.length ?? 0) > 0 && (
+              {(wall.cutouts?.length ?? 0) > 0 && (
                 <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-orange-400 border-2 border-white text-white text-[8px] flex items-center justify-center font-bold">
                   {wall.cutouts.filter(c => c.closed).length}
                 </span>
@@ -153,13 +168,46 @@ export default function ToolPanel() {
         ))}
       </div>
 
-      {/* Delete active wall */}
+      {/* Windows list */}
+      <div className="flex flex-col gap-1 max-h-32 overflow-y-auto hide-scrollbar mt-2 border-t border-sand-100 pt-2">
+        {windows.filter(w => w.closed).map(window => (
+          <Tooltip key={window.id} label={`${window.label}`}>
+            <button
+              id={`window-select-${window.id}`}
+              onClick={() => { setActiveWindow(window.id); setActiveTool('window') }}
+              className={`relative w-10 h-10 rounded-xl border-2 cursor-pointer transition-all duration-150 bg-blue-50 flex items-center justify-center text-xl ${
+                window.id === activeWindowId
+                  ? 'border-blue-500 scale-105 shadow-glow'
+                  : 'border-transparent hover:border-sand-300'
+              }`}
+            >
+              🪟
+            </button>
+          </Tooltip>
+        ))}
+      </div>
+
+      {/* Delete active wall/window */}
       {activeWallId && (
         <Tooltip label="Delete Selected Wall">
           <button
             id="tool-delete-wall"
             className="tool-btn text-red-400 hover:text-red-600 hover:bg-red-50"
             onClick={() => deleteWall(activeWallId)}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </Tooltip>
+      )}
+
+      {activeWindowId && (
+        <Tooltip label="Delete Selected Window">
+          <button
+            id="tool-delete-window"
+            className="tool-btn text-red-400 hover:text-red-600 hover:bg-red-50"
+            onClick={() => deleteWindow(activeWindowId)}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -1,4 +1,5 @@
 import { hexToRgb } from '../utils/colorUtils'
+import { applyWindowLighting } from '../utils/windowLightingUtils'
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -27,7 +28,7 @@ function tracePath(ctx, points) {
 }
 
 /** Apply color overlay (multiply) with even-odd cutout holes */
-function applyColor(ctx, wall, w, h) {
+function applyColor(ctx, wall, w, h, windows) {
   if (!wall.points || wall.points.length < 6) return
   const { r, g, b } = hexToRgb(wall.color ?? '#F5E6D0')
 
@@ -40,11 +41,15 @@ function applyColor(ctx, wall, w, h) {
   ctx.fillStyle = `rgb(${r},${g},${b})`
   ctx.fillRect(0, 0, w, h)
 
+  if (windows && windows.length > 0) {
+    applyWindowLighting(ctx, wall.points, windows, 1, { x: 0, y: 0 })
+  }
+
   ctx.restore()
 }
 
 /** Apply wallpaper pattern with even-odd cutout holes */
-function applyWallpaper(ctx, wall, w, h, patternImg) {
+function applyWallpaper(ctx, wall, w, h, patternImg, windows) {
   if (!wall.points || wall.points.length < 6 || !patternImg) return
 
   const wallpaperScale = wall.wallpaperScale ?? 1
@@ -73,6 +78,26 @@ function applyWallpaper(ctx, wall, w, h, patternImg) {
   ctx.globalAlpha = 0.4
   ctx.fillStyle = '#888888'
   ctx.fillRect(0, 0, w, h)
+  
+  if (windows && windows.length > 0) {
+    applyWindowLighting(ctx, wall.points, windows, 1, { x: 0, y: 0 })
+  }
+
+  ctx.restore()
+}
+
+/** Draw glassy window overlay */
+function applyWindowGlass(ctx, windowObj, w, h) {
+  if (!windowObj.points || windowObj.points.length < 6) return
+  ctx.save()
+  ctx.beginPath()
+  tracePath(ctx, windowObj.points)
+  ctx.clip('evenodd')
+
+  ctx.globalCompositeOperation = 'source-over'
+  ctx.globalAlpha = 0.15
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
 
   ctx.restore()
 }
@@ -81,7 +106,7 @@ function applyWallpaper(ctx, wall, w, h, patternImg) {
  * Generate a full-resolution composite PNG dataURL.
  * Correctly handles cutouts via even-odd clipping.
  */
-export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls) {
+export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows = []) {
   const baseImg = await loadImage(image)
 
   // Pre-load all wallpaper images in parallel
@@ -105,10 +130,15 @@ export async function generateCompositeDataURL(image, imageWidth, imageHeight, w
   for (const wall of walls) {
     if (!wall.closed || !wall.points || wall.points.length < 6) continue
     if (wall.mode === 'wallpaper' && wall.wallpaperUrl) {
-      applyWallpaper(ctx, wall, imageWidth, imageHeight, wallpaperImgMap[wall.wallpaperUrl])
+      applyWallpaper(ctx, wall, imageWidth, imageHeight, wallpaperImgMap[wall.wallpaperUrl], windows)
     } else {
-      applyColor(ctx, wall, imageWidth, imageHeight)
+      applyColor(ctx, wall, imageWidth, imageHeight, windows)
     }
+  }
+
+  for (const win of windows) {
+    if (!win.closed || !win.points || win.points.length < 6) continue
+    applyWindowGlass(ctx, win, imageWidth, imageHeight)
   }
 
   return canvas.toDataURL('image/png')
