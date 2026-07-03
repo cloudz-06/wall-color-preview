@@ -1,0 +1,16 @@
+{
+  "image": null,
+  "imageWidth": 0,
+  "imageHeight": 0,
+  "projectName": "Untitled Project",
+  "soundEnabled": false,
+  "walls": [],
+  "activeWallId": null,
+  "windows": [],
+  "activeWindowId": null,
+  "activeCutoutId": null,
+  "activeTool": "polygon",
+  "activePanel": "color",
+  "editingVariationId": null,
+  "variations": []
+}

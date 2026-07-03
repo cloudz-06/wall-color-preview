@@ -6,6 +6,7 @@ import EditorCanvas from '../components/canvas/EditorCanvas'
 import ToolPanel from '../components/canvas/ToolPanel'
 import ColorPanel from '../components/panels/ColorPanel'
 import WallpaperPanel from '../components/panels/WallpaperPanel'
+import MoodPresets from '../components/panels/MoodPresets'
 import ProcessingOverlay from '../components/ui/ProcessingOverlay'
 import BeforeAfterSlider from '../components/comparison/BeforeAfterSlider'
 import InlineEdit from '../components/ui/InlineEdit'
@@ -17,6 +18,7 @@ import confetti from 'canvas-confetti'
 const PANEL_TABS = [
   { id: 'color', label: '🎨 Colors' },
   { id: 'wallpaper', label: '🖼️ Wallpaper' },
+  { id: 'mood', label: '✨ Moods' },
 ]
 
 export default function Editor() {
@@ -88,19 +90,19 @@ export default function Editor() {
   }, [mode, generatePreview])
 
   const handleSave = useCallback(async () => {
-    if (closedWallsCount === 0 || isSaving) return
+    if (closedWallsCount === 0 || isSaving) return;
     setIsSaving(true)
     playClick()
     try {
-      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows)
+      const url = await generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows, { thumbnail: true })
+      
       if (url) {
-        // If we loaded an existing variation for editing, update it in place.
-        // Otherwise append a brand-new variation to the gallery.
         if (editingVariationId) {
           updateVariation(editingVariationId, url)
         } else {
           saveVariation(url)
         }
+        
         setSavedToast(true)
         playSuccess()
         setTimeout(() => setSavedToast(false), 4000)
@@ -108,7 +110,7 @@ export default function Editor() {
         throw new Error('Preview generation failed')
       }
     } catch (err) {
-      console.error('Save failed:', err)
+      console.error('Failed to save variation:', err);
       setErrorToast('Could not save — please try again.')
       setTimeout(() => setErrorToast(null), 4000)
     } finally {
@@ -416,6 +418,19 @@ export default function Editor() {
                   transition={{ duration: 0.2 }}
                 >
                   <WallpaperPanel />
+                </motion.div>
+              )}
+
+              {activePanel === 'mood' && (
+                <motion.div
+                  key="mood"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full flex flex-col"
+                >
+                  <MoodPresets />
                 </motion.div>
               )}
             </AnimatePresence>

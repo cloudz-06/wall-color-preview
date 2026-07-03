@@ -291,11 +291,11 @@ export const useEditorStore = create(
       // that the Save button knows to UPDATE rather than APPEND a new variation.
       // This is ephemeral — not persisted to localStorage.
       editingVariationId: null,
-
-      // ── Variations (Gallery) ──────────────────────────────
-      variations: [],
+          variations: [],
 
       saveVariation: (snapshotDataURL) => {
+        console.log('--- saveVariation called ---');
+        console.log('editingVariationId before save:', get().editingVariationId);
         const { walls, windows, imageWidth, imageHeight, projectName } = get();
         
         // Filter out incomplete drafts when saving
@@ -317,17 +317,30 @@ export const useEditorStore = create(
           createdAt:   new Date().toISOString(),
         };
 
-        set(s => ({
-          variations: [...(Array.isArray(s.variations) ? s.variations : []), variation],
-          editingVariationId: null, // new save resets edit tracking
-        }));
-        return variation.id;
+          const previousVariations = get().variations;
+          try {
+            set(s => {
+              console.log('saveVariation setting state! Count will go from', (s.variations || []).length, 'to', (s.variations || []).length + 1);
+              return {
+                variations: [...(Array.isArray(s.variations) ? s.variations : []), variation],
+                editingVariationId: null, // new save resets edit tracking
+              };
+            });
+            return variation.id;
+          } catch (err) {
+            console.error('[Store] Failed to save variation to storage:', err);
+            // Rollback in-memory state so Gallery stays in sync with disk
+            set({ variations: previousVariations });
+            throw err;
+          }
       },
 
       // updateVariation: immutable in-place update of an existing gallery entry.
       // Uses .map() to produce a brand-new array so Zustand detects the change
       // and the persist middleware serializes it to localStorage.
       updateVariation: (varId, snapshotDataURL) => {
+        console.log('--- updateVariation called ---');
+        console.log('varId:', varId, 'editingVariationId:', get().editingVariationId);
         const { walls, windows, imageWidth, imageHeight, projectName } = get();
         const safeWalls = Array.isArray(walls) 
           ? JSON.parse(JSON.stringify(walls.filter(w => w.closed))) 
@@ -335,24 +348,32 @@ export const useEditorStore = create(
         const safeWindows = Array.isArray(windows)
           ? JSON.parse(JSON.stringify(windows.filter(w => w.closed)))
           : [];
-          
-        set(s => ({
-          variations: (Array.isArray(s.variations) ? s.variations : []).map(v =>
-            v.id === varId
-              ? {
-                  ...v,
-                  projectName: projectName || v.projectName,
-                  snapshot:    snapshotDataURL ?? v.snapshot,
-                  walls:       safeWalls,
-                  windows:     safeWindows,
-                  imageWidth:  imageWidth  ?? v.imageWidth,
-                  imageHeight: imageHeight ?? v.imageHeight,
-                  updatedAt:   new Date().toISOString(),
-                }
-              : v
-          ),
-          editingVariationId: null,
-        }));
+                  const previousVariations = get().variations;
+          try {
+            set(s => ({
+              variations: (Array.isArray(s.variations) ? s.variations : []).map(v =>
+                v.id === varId
+                  ? {
+                      ...v,
+                      projectName: projectName || v.projectName,
+                      snapshot:    snapshotDataURL ?? v.snapshot,
+                      walls:       safeWalls,
+                      windows:     safeWindows,
+                      imageWidth:  imageWidth  ?? v.imageWidth,
+                      imageHeight: imageHeight ?? v.imageHeight,
+                      updatedAt:   new Date().toISOString(),
+                    }
+                  : v
+              ),
+              // We intentionally do NOT clear editingVariationId here.
+            }));
+          } catch (err) {
+            console.error('[Store] Failed to update variation in storage:', err);
+            set({ variations: previousVariations });
+            throw err;
+          }
+          // We intentionally do NOT clear editingVariationId here.
+          // This ensures subsequent saves while still in the editor continue to update the same gallery entry.
       },
 
       renameVariation: (varId, newName) => {
@@ -369,9 +390,16 @@ export const useEditorStore = create(
       },
 
       loadVariation: (varId) => {
+        console.log('--- loadVariation called ---');
+        console.log('Loading varId:', varId);
         const { variations, imageWidth: currentW, imageHeight: currentH } = get();
         const v = variations.find(x => x.id === varId);
-        if (!v) return;
+        if (!v) {
+          console.log('Variation not found!', varId);
+          return;
+        }
+        
+        console.log('Variation found, setting editingVariationId to:', varId);
         // Restore the canvas dimensions and name saved with the variation.
         set({
           projectName:        v.projectName || 'Untitled Project',
@@ -463,3 +491,7 @@ export const useEditorStore = create(
     }
   )
 );
+
+if (typeof window !== 'undefined') {
+  window.useEditorStore = useEditorStore;
+}

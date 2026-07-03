@@ -106,11 +106,15 @@ export function applyWindowLighting(ctx, scaledWallPoints, windows, scale = 1, p
   ctx.globalAlpha = 0.7;
 
   const grad = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
-  grad.addColorStop(0.00, 'rgba(255,255,255, 0.18)');
-  grad.addColorStop(0.25, 'rgba(0,0,0, 0.04)');
-  grad.addColorStop(0.50, 'rgba(0,0,0, 0.12)');
-  grad.addColorStop(0.75, 'rgba(0,0,0, 0.22)');
-  grad.addColorStop(1.00, 'rgba(0,0,0, 0.30)');
+  
+  // Improved exponential falloff with stronger highlight and darker far edge
+  grad.addColorStop(0.00, 'rgba(255,255,255, 0.28)'); // Noticeably brighter near window
+  grad.addColorStop(0.10, 'rgba(255,255,255, 0.12)'); // Rapid exponential falloff
+  grad.addColorStop(0.25, 'rgba(255,255,255, 0.02)'); // Almost neutral
+  grad.addColorStop(0.40, 'rgba(0,0,0, 0.08)');       // Subtle shadow begins
+  grad.addColorStop(0.60, 'rgba(0,0,0, 0.22)');       // Shadow deepens
+  grad.addColorStop(0.80, 'rgba(0,0,0, 0.32)');
+  grad.addColorStop(1.00, 'rgba(0,0,0, 0.42)');       // Darker far edge
 
   ctx.fillStyle = grad;
 

@@ -1,0 +1,10 @@
+--- LOCALSTORAGE MEASUREMENTS ---
+
+originalImage size: 7,84,920 bytes
+snapshot size: 7,84,920 bytes
+walls size: 210 bytes
+projectName size: 18 bytes
+windows size: 2 bytes
+lighting data size: 0 bytes
+
+total size: 15,70,070 bytes

@@ -5,6 +5,7 @@ import { useEditorStore } from '../store/editorStore'
 import { downloadDataURL } from '../utils/downloadUtils'
 import CreditsModal from '../components/ui/CreditsModal'
 import InlineEdit from '../components/ui/InlineEdit'
+import { generateCompositeDataURL } from '../hooks/useCanvasComposite'
 
 // ─── Per-card error boundary ───────────────────────────────────────────────
 // Framer Motion's AnimatePresence can swallow errors thrown during animated
@@ -71,15 +72,43 @@ export default function Gallery() {
     if (variations.length === 0) return
     try {
       const { downloadZip } = await import('../utils/downloadUtils')
-      const items = variations
-        .filter(v => v?.snapshot)
-        .map((v, i) => ({
-          dataURL: v.snapshot,
-          filename: `wall-variation-${i + 1}.png`,
-        }))
+      const items = []
+      for (let i = 0; i < variations.length; i++) {
+        const v = variations[i]
+        if (!v) continue
+        let dataURL = v.snapshot
+        if (image) {
+          try {
+            dataURL = await generateCompositeDataURL(image, v.imageWidth, v.imageHeight, v.walls, v.windows)
+          } catch (e) {
+            console.warn('Failed to regenerate full composite, falling back to thumbnail', e)
+          }
+        }
+        if (dataURL) {
+          items.push({
+            dataURL,
+            filename: `wall-variation-${i + 1}.png`,
+          })
+        }
+      }
       if (items.length > 0) await downloadZip(items, 'wall-variations')
     } catch (err) {
       console.error('Download all failed:', err)
+    }
+  }
+
+  const handleDownloadSingle = async (v, i) => {
+    if (!v) return
+    let dataURL = v.snapshot
+    if (image) {
+      try {
+        dataURL = await generateCompositeDataURL(image, v.imageWidth, v.imageHeight, v.walls, v.windows)
+      } catch (e) {
+        console.warn('Failed to regenerate full composite, falling back to thumbnail', e)
+      }
+    }
+    if (dataURL) {
+      downloadDataURL(dataURL, `wall-variation-${i + 1}`)
     }
   }
 
@@ -199,7 +228,7 @@ export default function Gallery() {
                         variation={v}
                         index={i}
                         onEdit={() => handleEdit(v.id)}
-                        onDownload={() => v.snapshot && downloadDataURL(v.snapshot, `wall-variation-${i + 1}`)}
+                        onDownload={() => handleDownloadSingle(v, i)}
                         onDelete={() => deleteVariation(v.id)}
                         onRename={(newName) => renameVariation(v.id, newName)}
                       />

@@ -106,7 +106,7 @@ function applyWindowGlass(ctx, windowObj, w, h) {
  * Generate a full-resolution composite PNG dataURL.
  * Correctly handles cutouts via even-odd clipping.
  */
-export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows = []) {
+export async function generateCompositeDataURL(image, imageWidth, imageHeight, walls, windows = [], options = {}) {
   const baseImg = await loadImage(image)
 
   // Pre-load all wallpaper images in parallel
@@ -139,6 +139,19 @@ export async function generateCompositeDataURL(image, imageWidth, imageHeight, w
   for (const win of windows) {
     if (!win.closed || !win.points || win.points.length < 6) continue
     applyWindowGlass(ctx, win, imageWidth, imageHeight)
+  }
+
+  if (options.thumbnail) {
+    // Generate a lightweight JPEG thumbnail (max width 600px)
+    const scale = Math.min(600 / imageWidth, 1);
+    const thumbW = imageWidth * scale;
+    const thumbH = imageHeight * scale;
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = thumbW;
+    thumbCanvas.height = thumbH;
+    const tCtx = thumbCanvas.getContext('2d');
+    tCtx.drawImage(canvas, 0, 0, thumbW, thumbH);
+    return thumbCanvas.toDataURL('image/jpeg', 0.7);
   }
 
   return canvas.toDataURL('image/png')
