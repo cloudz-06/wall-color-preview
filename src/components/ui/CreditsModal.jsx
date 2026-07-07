@@ -44,7 +44,7 @@ export default function CreditsModal({ isOpen, onClose }) {
                 </p>
 
                 <a
-                  href="https://b06e88d7.cloudz06.pages.dev/"
+                  href="https://cloudz06.vercel.app/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full btn-primary py-3 flex justify-center gap-2"

@@ -480,7 +480,7 @@ export default function Editor() {
               <div className="text-gray-500 font-normal">This free tool was built by <span className="text-brand-600 font-medium">Nandhagopan Babu</span>.</div>
             </div>
             <a
-              href="https://b06e88d7.cloudz06.pages.dev/"
+              href="https://cloudz06.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary py-2 px-4 text-xs whitespace-nowrap"
